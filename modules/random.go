@@ -6,20 +6,11 @@ import (
 	"strconv"
 )
 
-func init() {
-	RegisterModule(Module{
-		Tag: "random_number",
-		Patterns: []string{
-			"Give me a random number",
-			"Generate a random number",
-		},
-		Responses: []string{
-			"The number is %s",
-		},
-		Replacer: RandomNumberReplacer,
-	})
-}
+// RandomTag is the intent tag for its module
+var RandomTag = "random number"
 
-func RandomNumberReplacer(_, response string) string {
-	return fmt.Sprintf(response, strconv.Itoa(rand.Intn(100)))
+// RandomNumberReplacer replaces the pattern contained inside the response by a random number.
+// See modules/modules.go#Module.Replacer() for more details.
+func RandomNumberReplacer(_, _, response, _ string) (string, string) {
+	return RandomTag, fmt.Sprintf(response, strconv.Itoa(rand.Intn(100)))
 }

@@ -1,60 +1,73 @@
 package main
 
 import (
-	"encoding/json"
+	"flag"
 	"fmt"
-	"github.com/gookit/color"
-	"github.com/gorilla/handlers"
-	"github.com/gorilla/mux"
-	"github.com/olivia-ai/olivia/analysis"
-	"github.com/olivia-ai/olivia/training"
-	gocache "github.com/patrickmn/go-cache"
-	"log"
-	"net/http"
 	"os"
-	"time"
+	"strings"
+
+	"github.com/olivia-ai/olivia/locales"
+	"github.com/olivia-ai/olivia/training"
+
+	"github.com/olivia-ai/olivia/dashboard"
+
+	"github.com/olivia-ai/olivia/util"
+
+	"github.com/gookit/color"
+
+	"github.com/olivia-ai/olivia/network"
+
+	"github.com/olivia-ai/olivia/server"
 )
 
-type Response struct {
-	Content string `json:"content"`
-	Tag     string `json:"tag"`
-}
-
-var (
-	model = training.CreateNeuralNetwork()
-	cache = gocache.New(5*time.Minute, 5*time.Minute)
-)
+var neuralNetworks = map[string]network.Network{}
 
 func main() {
-	router := mux.NewRouter().StrictSlash(true)
-	router.HandleFunc("/api/response", PostResponse).Methods("POST")
+	port := flag.String("port", "8080", "The port for the API and WebSocket.")
+	localesFlag := flag.String("re-train", "", "The locale(s) to re-train.")
+	flag.Parse()
 
-	headersOk := handlers.AllowedHeaders([]string{"X-Requested-With", "Content-Type", "Authorization"})
-	originsOk := handlers.AllowedOrigins([]string{"*"})
-	methodsOk := handlers.AllowedMethods([]string{"GET", "POST", "PUT", "HEAD", "OPTIONS"})
-
-	port := "8080"
-	if os.Getenv("PORT") != "" {
-		port = os.Getenv("PORT")
+	// If the locales flag isn't empty then retrain the given models
+	if *localesFlag != "" {
+		reTrainModels(*localesFlag)
 	}
 
-	magenta := color.FgMagenta.Render
-	fmt.Printf("\nListening on the port %s...\n", magenta(port))
-	log.Fatal(http.ListenAndServe(":"+port, handlers.CORS(originsOk, headersOk, methodsOk)(router)))
+	// Print the Olivia ascii text
+	oliviaASCII := string(util.ReadFile("res/olivia-ascii.txt"))
+	fmt.Println(color.FgLightGreen.Render(oliviaASCII))
+
+	// Create the authentication token
+	dashboard.Authenticate()
+
+	for _, locale := range locales.Locales {
+		util.SerializeMessages(locale.Tag)
+
+		neuralNetworks[locale.Tag] = training.CreateNeuralNetwork(
+			locale.Tag,
+			false,
+		)
+	}
+
+	// Get port from environment variables if there is
+	if os.Getenv("PORT") != "" {
+		*port = os.Getenv("PORT")
+	}
+
+	// Serves the server
+	server.Serve(neuralNetworks, *port)
 }
 
-func PostResponse(w http.ResponseWriter, r *http.Request) {
-	responseSentence, responseTag := analysis.NewSentence(
-		r.FormValue("sentence"),
-	).Calculate(*cache, model, r.FormValue("authorId"))
+// reTrainModels retrain the given locales
+func reTrainModels(localesFlag string) {
+	// Iterate locales by separating them by comma
+	for _, localeFlag := range strings.Split(localesFlag, ",") {
+		fmt.Println(localeFlag)
+		path := fmt.Sprintf("res/locales/%s/training.json", localeFlag)
+		err := os.Remove(path)
 
-	// Marshall the response in json
-	response := Response{responseSentence, responseTag}
-	bytes, err := json.Marshal(response)
-
-	if err != nil {
-		fmt.Println(err)
+		if err != nil {
+			fmt.Printf("Cannot re-train %s model.", localeFlag)
+			return
+		}
 	}
-
-	fmt.Fprint(w, string(bytes))
 }

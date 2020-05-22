@@ -2,31 +2,25 @@ package modules
 
 import (
 	"fmt"
+
 	"github.com/olivia-ai/olivia/language"
 	"github.com/olivia-ai/olivia/util"
 )
 
-func init() {
-	RegisterModule(Module{
-		Tag: "area",
-		Patterns: []string{
-			"What is the area of ",
-			"Give me the area of ",
-		},
-		Responses: []string{
-			"The area of %s is %gkm²",
-		},
-		Replacer: AreaReplacer,
-	})
-}
+// AreaTag is the intent tag for its module
+var AreaTag = "area"
 
-func AreaReplacer(entry, response string) string {
-	country := language.FindCountry(entry)
+// AreaReplacer replaces the pattern contained inside the response by the area of the country
+// specified in the message.
+// See modules/modules.go#Module.Replacer() for more details.
+func AreaReplacer(locale, entry, response, _ string) (string, string) {
+	country := language.FindCountry(locale, entry)
 
-	// If there isn't a country respond with a message from res/messages.json
-	if country.Code == "" {
-		return util.GetMessage("no country")
+	// If there isn't a country respond with a message from res/datasets/messages.json
+	if country.Currency == "" {
+		responseTag := "no country"
+		return responseTag, util.GetMessage(locale, responseTag)
 	}
 
-	return fmt.Sprintf(response, country.CommonName, country.Area)
+	return AreaTag, fmt.Sprintf(response, ArticleCountries[locale](country.Name[locale]), country.Area)
 }

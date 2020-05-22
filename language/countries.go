@@ -3,27 +3,25 @@ package language
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/olivia-ai/olivia/util"
 	"strings"
+
+	"github.com/olivia-ai/olivia/util"
 )
 
+// Country is the serializer of the countries.json file in the res folder
 type Country struct {
-	OfficialName string   `json:"official_name"`
-	CommonName   string   `json:"common_name"`
-	Capital      string   `json:"capital"`
-	Region       string   `json:"continent"`
-	SubRegion    string   `json:"subcontinent"`
-	Code         string   `json:"code"`
-	Borders      []string `json:"borders"`
-	Area         float64  `json:"area"`
-	Currency     string   `json:"currency"`
-	Flag         string   `json:"flag"`
+	Name     map[string]string `json:"name"`
+	Capital  string            `json:"capital"`
+	Code     string            `json:"code"`
+	Area     float64           `json:"area"`
+	Currency string            `json:"currency"`
 }
 
 var countries = SerializeCountries()
 
+// SerializeCountries returns a list of countries, serialized from `res/datasets/countries.json`
 func SerializeCountries() (countries []Country) {
-	err := json.Unmarshal(util.ReadFile("res/countries.json"), &countries)
+	err := json.Unmarshal(util.ReadFile("res/datasets/countries.json"), &countries)
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -32,15 +30,23 @@ func SerializeCountries() (countries []Country) {
 }
 
 // FindCountry returns the country found in the sentence and if no country is found, returns an empty Country struct
-func FindCountry(sentence string) Country {
+func FindCountry(locale, sentence string) Country {
 	for _, country := range countries {
-		if !strings.Contains(strings.ToLower(sentence), strings.ToLower(country.CommonName)) &&
-			!strings.Contains(strings.ToLower(sentence), strings.ToLower(country.OfficialName)) {
+		name, exists := country.Name[locale]
+
+		if !exists {
 			continue
 		}
 
+		// If the actual country isn't contained in the sentence, continue
+		if !strings.Contains(strings.ToLower(sentence), strings.ToLower(name)) {
+			continue
+		}
+
+		// Returns the right country
 		return country
 	}
 
+	// Returns an empty country if none has been found
 	return Country{}
 }
